@@ -1,0 +1,161 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+
+int mem_size = 0;
+int* memory;
+int* page_refs;
+
+// Function to check if a page exists in memory
+bool is_page_in_memory(int page, int *memory, int mem_size) {
+    for (int i = 0; i < mem_size; i++) {
+        if (memory[i] == page) {
+            return true; // Page found in memory
+        }
+    }
+    return false; // Page not found in memory
+}
+
+// Function to simulate FIFO page replacement policy
+int fifo_page_faults(int *page_refs, int ref_size, int mem_size) {
+    int num_faults = 0;
+    int front = 0; // Front pointer for FIFO
+
+    // Initialize memory with -1 indicating empty
+    for (int i = 0; i < mem_size; i++) {
+        memory[i] = -1;
+    }
+
+    // Iterate through page references
+    for (int i = 0; i < ref_size; i++) {
+        // If page not in memory, replace page at front
+        if (!is_page_in_memory(page_refs[i], memory, mem_size)) {
+            memory[front] = page_refs[i]; // Replace page at front
+            front = (front + 1) % mem_size; // Update front pointer
+            num_faults++; // Increment page fault count
+        }
+    }
+
+    // Output final state of memory
+    printf("FIFO: %d page faults\n", num_faults);
+    printf("Final state of memory: ");
+    for (int i = 0; i < mem_size; i++) {
+        printf("%d ", memory[i]); // Print each page in memory
+    }
+    printf("\n");
+
+    return num_faults; // Return total page faults
+}
+
+// Least Recently Used (LRU) algorithm
+void lru_page_faults(int *page_refs, int ref_size, int mem_size) {
+    int num_faults = 0;
+    int* page_table = (int*) malloc(mem_size * sizeof(int));
+    int* page_usage = (int*) malloc(mem_size * sizeof(int));
+
+    // Initialize page table entries and usage counters to -1
+    for (int i = 0; i < mem_size; ++i) {
+        page_table[i] = -1;
+        page_usage[i] = -1;
+    }
+
+    // Process each page reference
+    for (int i = 0; i < ref_size; ++i) {
+        int page_ref = page_refs[i];
+        bool page_fault = true;
+
+        // Check if the page reference is already in the page table
+        for (int j = 0; j < mem_size; ++j) {
+            if (page_table[j] == page_ref) {
+                page_fault = false;
+                page_usage[j] = i;  // Update usage counter
+                break;
+            }
+        }
+
+        // If page fault occurs, replace the least recently used page
+        if (page_fault) {
+            int min_usage = page_usage[0];
+            int min_index = 0;
+
+            // Find the page with the minimum usage counter
+            for (int j = 1; j < mem_size; ++j) {
+                if (page_usage[j] < min_usage) {
+                    min_usage = page_usage[j];
+                    min_index = j;
+                }
+            }
+
+            page_table[min_index] = page_ref;
+            page_usage[min_index] = i;  // Update usage counter
+            num_faults++;
+        }
+    }
+
+    // Output final state of memory
+    printf("LRU: %d page faults\n", num_faults);
+    printf("Final state of memory: ");
+    for (int i = 0; i < mem_size; ++i) {
+        printf("%d ", page_table[i]);
+    }
+    printf("\n");
+
+    free(page_table);
+    free(page_usage);
+}
+
+int main(int argc, char* argv[]) {
+    if (argc != 3) {
+        printf("Usage: %s pagereffile memorysize\n", argv[0]);
+        return 1;
+    }
+
+    // Get file name and memory size from command line arguments
+    char* file_name = argv[1];
+    mem_size = atoi(argv[2]);
+
+    // Check if memory size is within the valid range
+    if (mem_size < 1 || mem_size > 10) {
+        printf("Error: memory size must be between 1 and 10\n");
+        return 1;
+    }
+
+    // Open page reference file
+    FILE *file = fopen(file_name, "r");
+    if (file == NULL) {
+        printf("Error opening file %s.\n", file_name);
+        return 1; // Exit with error code
+    }
+
+    // Get page references from the file and store them in an array
+    int num_refs = 0, page_ref;
+    int ref_capacity = 100; // Assuming maximum 100 page references
+    page_refs = (int*) malloc(ref_capacity * sizeof(int));
+
+    // Read page references from file
+    while (fscanf(file, "%d", &page_ref) == 1) {
+        page_refs[num_refs++] = page_ref;
+        if (num_refs >= ref_capacity) {
+            // Resize the array if needed
+            ref_capacity *= 2;
+            page_refs = realloc(page_refs, ref_capacity * sizeof(int));
+        }
+    }
+
+    fclose(file); // Close page reference file
+
+    // Allocate memory for page table
+    memory = (int*) malloc(mem_size * sizeof(int));
+
+    // Calculate page faults using FIFO
+    int fifo_faults = fifo_page_faults(page_refs, num_refs, mem_size);
+
+    // Calculate page faults using LRU
+    lru_page_faults(page_refs, num_refs, mem_size);
+
+    // Free dynamically allocated memory
+    free(memory);
+    free(page_refs);
+
+    return 0;
+}
